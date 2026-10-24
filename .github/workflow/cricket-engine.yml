@@ -1,0 +1,53 @@
+name: cricket-engine
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"     # every 6 hours (00:17, 06:17, 12:17, 18:17 UTC); off the top of the hour, when GitHub is busiest
+  workflow_dispatch:            # lets you run it by hand from the Actions tab
+
+# One run at a time. A second run waits for the first to commit, so two runs never edit the database together.
+concurrency:
+  group: cricket-engine
+  cancel-in-progress: false
+
+permissions:
+  contents: write               # the run commits data/predictions.db and docs/ back to the repo
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements_live.txt
+
+      - run: pip install -r requirements_live.txt
+
+      - name: Run one engine pass (create / lock / resolve; API calls only when due)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+        run: |
+          mkdir -p data
+          python cricket_engine.py --once --smart --db data/predictions.db
+
+      - name: Build the page
+        run: python build_site.py --db data/predictions.db --out docs
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name "cricket-engine-bot"
+          git config user.email "cricket-engine-bot@users.noreply.github.com"
+          git add data docs
+          if git diff --cached --quiet; then
+            echo "No changes."
+          else
+            git commit -m "engine run $(date -u +%Y-%m-%dT%H:%MZ)"
+            git pull --rebase
+            git push
+          fi
