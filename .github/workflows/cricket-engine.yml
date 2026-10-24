@@ -30,7 +30,7 @@ jobs:
       - name: Run one engine pass (create / lock / resolve; API calls only when due)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          RAPIDAPI_KEY: ${{ secrets.RAPID_API_KEY }}
+          RAPID_API_KEY: ${{ secrets.RAPID_API_KEY }}
         run: |
           mkdir -p data
           python cricket_engine.py --once --smart --db data/predictions.db
