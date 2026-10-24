@@ -2,16 +2,15 @@ name: cricket-engine
 
 on:
   schedule:
-    - cron: "17 */6 * * *"     # every 6 hours (00:17, 06:17, 12:17, 18:17 UTC); off the top of the hour, when GitHub is busiest
-  workflow_dispatch:            # lets you run it by hand from the Actions tab
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
 
-# One run at a time. A second run waits for the first to commit, so two runs never edit the database together.
 concurrency:
   group: cricket-engine
   cancel-in-progress: false
 
 permissions:
-  contents: write               # the run commits data/predictions.db and docs/ back to the repo
+  contents: write
 
 jobs:
   run:
@@ -31,7 +30,7 @@ jobs:
       - name: Run one engine pass (create / lock / resolve; API calls only when due)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-          RAPIDAPI_KEY: ${{ secrets.RAPID_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
         run: |
           mkdir -p data
           python cricket_engine.py --once --smart --db data/predictions.db
