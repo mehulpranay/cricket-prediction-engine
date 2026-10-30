@@ -48,7 +48,10 @@ HIGH_ENGAGEMENT_TEAMS = [
     "India", "Australia", "England", "Pakistan",
     "South Africa", "New Zealand", "West Indies", "Bangladesh", "TBC", "TBD"
 ]
-EXCLUDED_FORMATS = ["TEST"]   # no Test matches: they last days and a draw has no YES/NO winner
+EXCLUDED_FORMATS = ["TEST", "T10", "OTHER"]   # compared in upper case. No Tests (days long, draws); no T10 or unclassified ("OTHER") matches
+# Series whose name contains any of these words (case-insensitive) are skipped. Cricbuzz labels Hong Kong Sixes (6-a-side, many matches a day) as "T20",
+# so the format filter above cannot catch it.
+EXCLUDED_SERIES_KEYWORDS = ["sixes"]
 
 
 # ---------------------------------------------------------------------------
@@ -213,9 +216,9 @@ def _spend_call() -> bool:
 
 
 def _rapid_headers() -> dict:
-    key = os.environ.get("RAPID_API_KEY")
+    key = os.environ.get("RAPIDAPI_KEY")
     if not key:
-        raise RuntimeError("Set the RAPID_API_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
+        raise RuntimeError("Set the RAPIDAPI_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
     return {"x-rapidapi-key": key, "x-rapidapi-host": RAPIDAPI_HOST}
 
 
@@ -231,6 +234,7 @@ def fetch_matches():
 
     seen_match_ids = set()
     target_matches = []
+    formats_seen = {}   # matchFormat -> how many matches in the feed; printed so the run log shows which values Cricbuzz really uses
 
     for url in [url_upcoming]:   # the live endpoint only lists matches already in progress, which are skipped below anyway
 
@@ -265,6 +269,7 @@ def fetch_matches():
                         team2 = info.get("team2", {}).get("teamName", "TBC")
                         series_name = info.get("seriesName", "Unknown Series")
                         fmt = info.get("matchFormat", "")
+                        formats_seen[fmt] = formats_seen.get(fmt, 0) + 1
                         state = info.get("state", "").title()
                         status = info.get("status", "")
 
@@ -279,7 +284,9 @@ def fetch_matches():
                         is_hun = (fmt == "HUN")
                         is_high_engagement = (team1 in HIGH_ENGAGEMENT_TEAMS or team2 in HIGH_ENGAGEMENT_TEAMS)
 
-                        if fmt not in EXCLUDED_FORMATS and (is_hun or is_high_engagement):
+                        is_excluded_series = any(k in series_name.lower() for k in EXCLUDED_SERIES_KEYWORDS)
+
+                        if fmt.upper() not in EXCLUDED_FORMATS and not is_excluded_series and (is_hun or is_high_engagement):
                             start_time_sec = int(info["startDate"]) / 1000
                             lock_time_sec = start_time_sec - (LOCK_MINUTES_BEFORE_START * 60)
 
@@ -305,6 +312,7 @@ def fetch_matches():
         except Exception as e:
             print(f"Unexpected error for {url}: {e}")
 
+    print(f"matchFormat values in the feed: {formats_seen}")
     return target_matches
 
 
@@ -387,6 +395,7 @@ Submit your answer by calling the function {MARKET_TOOL_NAME}.
 # ---------------------------------------------------------------------------
 
 def init_db():
+    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)   # e.g. --db data/predictions.db on a fresh checkout
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
@@ -416,6 +425,20 @@ def init_db():
     cursor.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
     conn.commit()
     conn.close()
+
+
+def purge_excluded_series():
+    """Deletes markets that are still OPEN or LOCKED (no result yet) from series that are now excluded, so they stop costing scorecard calls."""
+    conn = sqlite3.connect(DB_PATH)
+    removed = 0
+    for (pred_id, series, question) in conn.execute("SELECT id, seriesName, question FROM predictions WHERE market_status IN ('OPEN', 'LOCKED')").fetchall():
+        if any(k in (series or "").lower() for k in EXCLUDED_SERIES_KEYWORDS):
+            conn.execute("DELETE FROM predictions WHERE id = ?", (pred_id,))
+            print(f"Removed unresolved market #{pred_id} from excluded series {series!r}: {question}")
+            removed += 1
+    conn.commit()
+    conn.close()
+    return removed
 
 
 def _meta_get(key):
@@ -669,6 +692,7 @@ def run_pipeline(smart=False):
     # -------------------------------------------------------------
     # Pass 1: Fetch Upcoming Matches & Create Open Markets
     # -------------------------------------------------------------
+    purge_excluded_series()
     print("\n[Pass 1] Fetching & creating upcoming markets...")
     if smart and not _due("last_discovery", DISCOVERY_MINUTES):
         upcoming_matches = []
