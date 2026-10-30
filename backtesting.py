@@ -147,7 +147,7 @@ def _check_variant(db_path: str) -> None:
 # Parsing + question generation
 # ---------------------------------------------------------------------------
 
-def parse_cricsheet_json(file_path):
+def parse_cricsheet_json(file_path): # parsing info of one match from cricsheet json file
     with open(file_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
@@ -255,7 +255,7 @@ def generate_backtest_question(match_info):
 # ---------------------------------------------------------------------------
 
 def run_backtest_simulation(data_dir: str, db_path: str, n: int = 250, seed: int = 42, after: str = None,
-                            swap_teams: bool = False, ids_from: str = None) -> int:
+                            swap_teams: bool = False, ids_from: str = None) -> int: 
     """Scores up to `n` NEW matches (never one already in the DB). Returns how many were added.
     With `after` ('YYYY-MM-DD'), only matches played on or after that date are considered.
     With `swap_teams`, each match is also scored with the two teams in swapped order (position-bias check).
@@ -266,7 +266,7 @@ def run_backtest_simulation(data_dir: str, db_path: str, n: int = 250, seed: int
         return 0
 
     _check_variant(db_path)
-    if ids_from:
+    if ids_from: # re-score exactly the matches already scored in another DB, in its order
         src = sqlite3.connect(ids_from)
         old_ids = [r[0] for r in src.execute("SELECT matchId FROM backtest_predictions WHERE brier_score IS NOT NULL ORDER BY id")]
         src.close()
