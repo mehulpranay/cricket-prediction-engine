@@ -216,9 +216,9 @@ def _spend_call() -> bool:
 
 
 def _rapid_headers() -> dict:
-    key = os.environ.get("RAPIDAPI_KEY")
+    key = os.environ.get("RAPID_API_KEY")
     if not key:
-        raise RuntimeError("Set the RAPIDAPI_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
+        raise RuntimeError("Set the RAPID_API_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
     return {"x-rapidapi-key": key, "x-rapidapi-host": RAPIDAPI_HOST}
 
 
