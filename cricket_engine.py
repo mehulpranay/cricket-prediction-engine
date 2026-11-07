@@ -216,9 +216,9 @@ def _spend_call() -> bool:
 
 
 def _rapid_headers() -> dict:
-    key = os.environ.get("RAPID_API_KEY")
+    key = os.environ.get("RAPIDAPI_KEY")
     if not key:
-        raise RuntimeError("Set the RAPID_API_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
+        raise RuntimeError("Set the RAPIDAPI_KEY environment variable (RapidAPI -> Cricbuzz Cricket).")
     return {"x-rapidapi-key": key, "x-rapidapi-host": RAPIDAPI_HOST}
 
 
@@ -660,6 +660,7 @@ def check_and_resolve(smart=False):
                     WHERE id = ?
                 ''', (outcome, is_correct, brier_score, pred_id))
 
+                conn.commit()   # release the write lock now: the next fetch_scorecard() counts its API call through a second connection
                 print(f"✅ RESOLVED #{pred_id}: {question} → {outcome} | Brier: {brier_score:.4f}")
 
             elif outcome == 'UNRESOLVED':
@@ -669,6 +670,7 @@ def check_and_resolve(smart=False):
                     WHERE id = ?
                 ''', (pred_id,))
 
+                conn.commit()   # same reason as above
                 print(f"⚠️ VOIDED #{pred_id}: Match abandoned or no result.")
 
             else:

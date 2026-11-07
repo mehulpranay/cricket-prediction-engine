@@ -735,7 +735,7 @@ def run_calibration_experiment(df: pd.DataFrame, repeats: int = 40, folds: int =
     oof = {m: np.empty((repeats, n)) for m in methods}          # out-of-fold prediction of every match, in every repeat
     for r in range(repeats):
         skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=int(rng.integers(2**31 - 1)))
-        for tr, te in skf.split(p, y):
+        for tr, te in skf.split(p, y): # tr and te are indices of the training and test splits
             for m in methods:
                 oof[m][r, te] = _apply_calibrator(m, _fit_calibrator(m, p[tr], y[tr]), p[te])
 
