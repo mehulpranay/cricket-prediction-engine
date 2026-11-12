@@ -41,6 +41,8 @@ RESOLVE_CHECK_MINUTES = 300    # --smart: look at scorecards at most this often 
 # --smart: no scorecard call for a market until this long after its start (a match cannot be over earlier), by Cricbuzz format
 RESOLVE_AFTER_START_MINUTES = {"T20": 210, "HUN": 180, "ODI": 480}
 RESOLVE_AFTER_DEFAULT_MINUTES = 360
+VOID_AFTER_HOURS = 48          # a LOCKED market whose scorecard still shows no result this long after the scheduled start is voided
+                               # (e.g. a match abandoned without a ball bowled, where Cricbuzz returns an empty status)
 MONTHLY_CALL_BUDGET = 190      # RapidAPI free plan is 200 calls a month; the engine stops calling at this count and waits for the next month
 LOCK_MINUTES_BEFORE_START = 35   # before the toss (about 30 min before start), so toss information can never enter
 
@@ -676,7 +678,17 @@ def check_and_resolve(smart=False):
             else:
                 print(f"⚠️ Unexpected resolver output {outcome!r} for #{pred_id}; leaving it LOCKED.")
         else:
-            print(f"⏳ Still in progress (#{pred_id}): {status}")
+            start = datetime.fromisoformat(pred[5])
+            if datetime.now(timezone.utc) - start >= timedelta(hours=VOID_AFTER_HOURS):
+                cursor.execute('''
+                    UPDATE predictions
+                    SET actual_outcome = 'VOID', market_status = 'VOID'
+                    WHERE id = ?
+                ''', (pred_id,))
+                conn.commit()
+                print(f"⚠️ VOIDED #{pred_id}: no result {VOID_AFTER_HOURS}h after the scheduled start (status {status!r}).")
+            else:
+                print(f"⏳ Still in progress (#{pred_id}): {status}")
 
     conn.commit()
     conn.close()
